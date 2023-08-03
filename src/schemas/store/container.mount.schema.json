@@ -1,0 +1,54 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"id": "container.mount",
+	"definitions": {
+		"MountKindBind": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["source"],
+			"properties": {
+				"kind": { "const": "bind" },
+				"readOnly": { "type": "boolean" },
+				"source": { "type": "string" }
+			}
+		},
+		"MountKindSize": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["size"],
+			"properties": {
+				"kind": { "const": "tmpfs" },
+				"size": { "type": "string" }
+			}
+		},
+		"MountKindVolume": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["name"],
+			"properties": {
+				"kind": { "const": "volume" },
+				"name": { "type": "string" }
+			}
+		},
+		"MountKindBase": {
+			"type": "object",
+			"required": ["target"],
+			"properties": {
+				"kind": { "type": "string", "enum": ["bind", "tmpfs", "volume"] },
+				"target": { "type": "string" }
+			}
+		}
+	},
+
+	"type": "object",
+	"allOf": [
+		{ "$ref": "#/definitions/MountKindBase" },
+		{
+			"anyOf": [
+				{ "$ref": "#/definitions/MountKindBind" },
+				{ "$ref": "#/definitions/MountKindSize" },
+				{ "$ref": "#/definitions/MountKindVolume" }
+			]
+		}
+	]
+}

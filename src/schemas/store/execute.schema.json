@@ -1,0 +1,16 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"id": "execute",
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"isTemplate": { "type": "boolean" },
+		"environments": { "$ref": "./misc.schema.json#/definitions/envLike" },
+		"podmanArguments": { "type": "array", "items": { "type": "string" } },
+		"networking": { "$ref": "./container.network.schema.json" },
+		"mount": {
+			"type": "array",
+			"items": { "$ref": "./container.mount.schema.json" }
+		}
+	}
+}

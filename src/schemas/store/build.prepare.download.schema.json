@@ -1,0 +1,58 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"id": "build.prepare.download",
+	"definitions": {
+		"prepareKindDownloadSimple": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["url"],
+			"properties": {
+				"kind": { "const": "file" },
+				"url": { "type": "string" }
+			}
+		},
+		"prepareKindDownloadGit": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["url"],
+			"properties": {
+				"kind": { "const": "clone" },
+				"commit": { "type": "string" },
+				"url": { "type": "string" }
+			}
+		},
+		"prepareKindDownloadRelease": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["repo", "file"],
+			"properties": {
+				"kind": { "const": "release" },
+				"repo": { "type": "string" },
+				"tag": { "type": "string" },
+				"file": { "type": "string" }
+			}
+		},
+		"prepareKindDownloadKind": { "type": "string", "enum": ["file", "clone", "release"] },
+		"prepareKindDownloadBase": {
+			"type": "object",
+			"required": ["kind"],
+			"properties": {
+				"kind": { "$ref": "#/definitions/prepareKindDownloadKind" }
+			}
+		}
+	},
+
+	"type": "array",
+	"items": {
+		"allOf": [
+			{ "$ref": "#/definitions/prepareKindDownloadBase" },
+			{
+				"anyOf": [
+					{ "$ref": "#/definitions/prepareKindDownloadSimple" },
+					{ "$ref": "#/definitions/prepareKindDownloadGit" },
+					{ "$ref": "#/definitions/prepareKindDownloadRelease" }
+				]
+			}
+		]
+	}
+}

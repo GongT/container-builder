@@ -1,0 +1,45 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"id": "build_config",
+	"additionalProperties": false,
+	"type": "object",
+	"required": ["publish", "execute", "build"],
+	"properties": {
+		"input": { "$ref": "./misc.schema.json#/definitions/envLike" },
+		"publish": {
+			"type": "object",
+			"description": "final image name",
+			"additionalProperties": false,
+			"required": ["name"],
+			"properties": {
+				"repo": {
+					"type": "string",
+					"description": "repo & path part"
+				},
+				"name": {
+					"type": "string",
+					"description": "name part"
+				},
+				"tag": {
+					"type": "string",
+					"description": "tag part"
+				}
+			}
+		},
+		"execute": { "$ref": "./execute.schema.json" },
+		"build": {
+			"additionalProperties": false,
+			"type": "object",
+			"required": ["steps"],
+			"properties": {
+				"prepare": { "$ref": "./build.prepare.schema.json" },
+				"config": { "$ref": "./container.config.schema.json" },
+				"steps": {
+					"minItems": 1,
+					"type": "array",
+					"items": { "$ref": "./build.step.schema.json" }
+				}
+			}
+		}
+	}
+}

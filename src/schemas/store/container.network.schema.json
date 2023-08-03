@@ -1,0 +1,51 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"id": "container.network",
+	"definitions": {
+		"NetworkKindBridge": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["macAddress"],
+			"properties": {
+				"kind": { "const": "bridge" },
+				"macAddress": { "type": "string", "pattern": "^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$" }
+			}
+		},
+		"NetworkKindSimple": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["ports"],
+			"properties": {
+				"kind": { "const": "simple" },
+				"ports": {
+					"type": "array",
+					"items": {
+						"anyOf": [
+							{
+								"type": "string",
+								"pattern": "^\\d+(-\\d+)?$"
+							},
+							{
+								"type": "number"
+							}
+						]
+					}
+				}
+			}
+		},
+		"NetworkKindBase": {
+			"type": "object",
+			"required": ["kind"],
+			"properties": {
+				"kind": { "type": "string", "enum": ["disabled", "simple", "bridge"] }
+			}
+		}
+	},
+
+	"allOf": [
+		{ "$ref": "#/definitions/NetworkKindBase" },
+		{
+			"anyOf": [{ "$ref": "#/definitions/NetworkKindBridge" }, { "$ref": "#/definitions/NetworkKindSimple" }]
+		}
+	]
+}

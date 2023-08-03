@@ -1,0 +1,38 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"definitions": {
+		"cmdLike": {
+			"anyOf": [
+				{
+					"type": "array",
+					"items": { "type": "string" }
+				},
+				{
+					"type": "string"
+				}
+			]
+		},
+		"envLike": {
+			"anyOf": [
+				{
+					"type": "array",
+					"items": { "type": "string", "pattern": "^[a-zA-Z][-a-zA-Z0-9_.]+=.*$" }
+				},
+				{
+					"type": "object",
+					"additionalProperties": {
+						"anyOf": [
+							{
+								"type": "string"
+							},
+							{
+								"type": "boolean"
+							}
+						]
+					},
+					"propertyNames": { "pattern": "^[a-zA-Z][-a-zA-Z0-9_.]+$" }
+				}
+			]
+		}
+	}
+}

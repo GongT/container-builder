@@ -1,0 +1,171 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"id": "build.step",
+	"definitions": {
+		"stepKindFrom": {
+			"type": "object",
+			"required": ["kind", "image"],
+			"additionalProperties": false,
+			"properties": {
+				"kind": { "const": "from" },
+				"image": { "type": "string" },
+				"tag": { "type": "string" }
+			}
+		},
+		"stepKindBuild": {
+			"type": "object",
+			"required": ["kind", "containerFile"],
+			"additionalProperties": false,
+			"properties": {
+				"kind": { "const": "build" },
+				"contextDir": { "type": "string" },
+				"containerFile": { "type": "string" },
+				"ignoreFile": { "type": "string" },
+				"extraArgs": { "type": "array", "items": { "type": "string" } }
+			}
+		},
+		"stepKindCopyfiles": {
+			"type": "object",
+			"required": ["kind", "files", "dest"],
+			"additionalProperties": false,
+			"properties": {
+				"kind": { "const": "copyfiles" },
+				"files": {
+					"anyOf": [
+						{
+							"type": "array",
+							"items": { "type": "string" }
+						},
+						{
+							"type": "string"
+						}
+					]
+				},
+				"dest": { "type": "string" },
+				"copyFrom": { "type": "string" }
+			}
+		},
+		"stepKindInstall": {
+			"type": "object",
+			"required": ["kind", "packages", "packageManager"],
+			"additionalProperties": false,
+			"properties": {
+				"kind": { "const": "install" },
+				"packages": {
+					"description": "if string, must be file name",
+					"anyOf": [
+						{
+							"type": "array",
+							"items": { "type": "string" }
+						},
+						{
+							"type": "string",
+							"pattern": "^\\."
+						}
+					]
+				},
+				"packageManager": { "type": "string", "enum": ["apt", "dnf", "apk", "pacman"] }
+			}
+		},
+		"stepKindExecute": {
+			"type": "object",
+			"required": ["kind", "scriptFile"],
+			"additionalProperties": false,
+			"properties": {
+				"kind": { "const": "execute" },
+				"scriptFile": {
+					"type": "string",
+					"pattern": "^\\.",
+					"description": "a file path"
+				},
+				"contextDir": { "type": "string" },
+				"interceptor": { "type": "string", "description": "argv0 in container, defaults to bash" }
+			}
+		},
+		"stepKindNginx": {
+			"type": "object",
+			"required": ["kind", "provideSocket"],
+			"additionalProperties": false,
+			"properties": {
+				"kind": { "const": "nginx" },
+				"configFile": {
+					"type": "string",
+					"pattern": "^\\."
+				},
+				"provideSocket": {
+					"anyOf": [
+						{
+							"type": "boolean",
+							"const": true
+						},
+						{
+							"type": "string"
+						}
+					]
+				}
+			}
+		},
+		"stepKindSystemd": {
+			"type": "object",
+			"required": ["kind"],
+			"additionalProperties": false,
+			"properties": {
+				"kind": { "const": "systemd" },
+				"preInit": {
+					"type": ["array"],
+					"items": { "type": "string", "pattern": "^\\." }
+				},
+				"add": {
+					"type": ["array"],
+					"items": { "type": "string", "pattern": "^\\." }
+				},
+				"override": {
+					"type": ["object"],
+					"additionalProperties": { "type": "string", "pattern": "^\\." }
+				},
+				"enable": { "type": "array", "items": { "type": "string" } },
+				"disable": { "type": "array", "items": { "type": "string" } },
+				"mask": { "type": "array", "items": { "type": "string" } },
+				"default": { "type": "string" }
+			}
+		},
+		"BuildStepKind": {
+			"type": "string",
+			"enum": ["from", "build", "install", "copyfiles", "execute", "systemd", "nginx"]
+		},
+		"buildStepItemBase": {
+			"type": "object",
+			"required": ["title", "kind"],
+			"properties": {
+				"id": { "type": "string", "description": "for reference" },
+				"title": { "type": "string", "description": "only note for user" },
+				"kind": { "$ref": "#/definitions/BuildStepKind" },
+				"cache": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"hashFiles": { "type": "array", "items": { "type": "string" } },
+						"mount": { "type": "string" }
+					}
+				},
+				"config": { "$ref": "./container.config.schema.json" }
+			}
+		}
+	},
+
+	"type": "object",
+	"allOf": [
+		{ "$ref": "#/definitions/buildStepItemBase" },
+		{
+			"anyOf": [
+				{ "$ref": "#/definitions/stepKindFrom" },
+				{ "$ref": "#/definitions/stepKindBuild" },
+				{ "$ref": "#/definitions/stepKindCopyfiles" },
+				{ "$ref": "#/definitions/stepKindInstall" },
+				{ "$ref": "#/definitions/stepKindExecute" },
+				{ "$ref": "#/definitions/stepKindNginx" },
+				{ "$ref": "#/definitions/stepKindSystemd" }
+			]
+		}
+	]
+}

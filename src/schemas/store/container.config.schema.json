@@ -1,0 +1,59 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema",
+	"id": "container.config",
+	"additionalProperties": false,
+	"type": "object",
+	"properties": {
+		"annotation": { "$ref": "./misc.schema.json#/definitions/envLike" },
+		"label": { "$ref": "./misc.schema.json#/definitions/envLike" },
+		"arch": { "type": "string" },
+		"author": { "type": "string" },
+		"comment": { "type": "string" },
+		"createdBy": { "type": "string" },
+		"domainName": { "type": "string" },
+		"hostName": { "type": "string" },
+		"user": { "type": "string" },
+		"entryPoint": { "$ref": "./misc.schema.json#/definitions/cmdLike" },
+		"workingdir": { "type": "string" },
+		"command": { "$ref": "./misc.schema.json#/definitions/cmdLike" },
+		"stopSignal": { "type": "string" },
+		"shell": { "type": "string" },
+		"onBuild": { "type": "string" },
+		"env": { "$ref": "misc.schema.json#/definitions/envLike" },
+		"volume": { "type": "array", "items": { "type": "string" } },
+		"healthcheck": {
+			"additionalProperties": false,
+			"type": "object",
+			"properties": {
+				"command": { "$ref": "./misc.schema.json#/definitions/cmdLike" },
+				"interval": { "type": "number" },
+				"retries": { "type": "number" },
+				"startPeriod": { "type": "number" },
+				"timeout": { "type": "number" }
+			}
+		},
+		"os": {
+			"additionalProperties": false,
+			"type": "object",
+			"properties": {
+				"name": { "type": "string" },
+				"feature": { "type": "string" },
+				"version": { "type": "string" },
+				"variant": { "type": "string" }
+			}
+		},
+		"port": {
+			"type": "array",
+			"items": {
+				"anyOf": [
+					{
+						"type": "number"
+					},
+					{
+						"type": "string"
+					}
+				]
+			}
+		}
+	}
+}
