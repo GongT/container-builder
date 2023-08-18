@@ -7,7 +7,12 @@
 			"group": "build",
 			"problemMatcher": ["$tsc-watch"],
 			"label": "npm: watch",
-			"detail": "heft build-watch"
+			"detail": "heft build-watch",
+			"options": {
+				"env": {
+					"NODE_ENV": "development"
+				}
+			}
 		}
 	]
 }

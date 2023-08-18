@@ -1,10 +1,10 @@
 import { registerGlobalLifecycle } from '@idlebox/common';
 import { readFile } from 'fs/promises';
 import { basename, dirname } from 'path';
+import { IBuildah, ITmpFile } from '../../helpers/fs/dependency-injection/tokens.generated';
+import { inject, registerAuto } from '../../helpers/fs/dependency-injection/di';
 import { ensureExec } from '../../helpers/fs/helper';
-import { createTmpFile } from '../../helpers/fs/temp';
-import { Buildah } from './buildah';
-import { shortId } from './share';
+import { shortId } from './container-tool';
 
 interface ICopyArgs {
 	executable?: true;
@@ -12,23 +12,30 @@ interface ICopyArgs {
 	from?: string;
 }
 
-export class BuildahStep extends Buildah {
+@registerAuto()
+export class BuildahStep {
+	@inject(ITmpFile)
+	protected declare readonly tmp: ITmpFile;
+	@inject(IBuildah)
+	protected declare readonly buildah: IBuildah;
+
 	private _containerId?: string;
 
-	constructor(private readonly imageName: string) {
-		super();
+	private declare readonly imageName: string;
+	async init(imageName: string) {
 		registerGlobalLifecycle(this);
+		return { imageName };
 	}
 
 	async dispose() {
 		if (this._containerId) {
-			await this.run(['rm', this._containerId]);
+			await this.buildah.run(['rm', this._containerId]);
 		}
 	}
 
 	async start(name: string) {
-		const tmpf = await createTmpFile();
-		await this.run(['from', this.imageName, `--cidfile=${tmpf}`, `--name=${name}`, '--pull=never']);
+		const tmpf = await this.tmp.createTmpFile();
+		await this.buildah.run(['from', this.imageName, `--cidfile=${tmpf}`, `--name=${name}`, '--pull=never']);
 		const cid = await readFile(tmpf, 'utf-8');
 		this._containerId = shortId(cid);
 		return this._containerId;
@@ -44,7 +51,7 @@ export class BuildahStep extends Buildah {
 			args.push('--workingdir=/tmp');
 		}
 		args.push(...cmds);
-		await this.run(args);
+		await this.buildah.run(args);
 	}
 	async executeScriptFile(file: string) {
 		await ensureExec(file);
@@ -58,8 +65,6 @@ export class BuildahStep extends Buildah {
 		if (options.from) args.push(`--from=${options.from}`);
 		if (options.executable) args.push('--chmod=0755');
 		args.push(this._containerId, src, dest);
-		this.run(args);
+		this.buildah.run(args);
 	}
 }
-
-// export interface IBuildExecOptions {}

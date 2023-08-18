@@ -1,12 +1,11 @@
 import type { FileBuilder } from '@build-script/heft-plugins';
 import { writeFileIfChange } from '@idlebox/node';
-import ajv from 'ajv';
+import ajv, { ValidateFunction } from 'ajv';
 import standaloneCode from 'ajv/dist/standalone';
 import { parse } from 'comment-json';
 import { readFile } from 'fs/promises';
 import { compileFromFile } from 'json-schema-to-typescript';
 import { resolve } from 'path';
-import { pathToFileURL } from 'url';
 
 // function fileNameToType(name: string) {
 // 	name = basename(name, '.schema.json');
@@ -24,7 +23,7 @@ function createLoader(store: string, builder: FileBuilder) {
 		builder.watchFiles(file);
 		const content = await readFile(file, 'utf-8');
 		const json = parse(content, undefined, true) as any;
-		json.id = pathToFileURL(file).toString();
+		json.$id = 'file:///' + uri;
 		return json;
 	};
 }
@@ -50,7 +49,7 @@ export async function generate(builder: FileBuilder) {
 	a.removeKeyword('id');
 	a.addKeyword('id');
 
-	const compiled = await a.compileAsync(await loader('schema.json')).catch((e: Error) => {
+	function schemaError(e: Error): never {
 		let m = e.message;
 		m = m.replace(/file:\/\/(.+)#/, (_m0, file: string) => {
 			// console.log('????', _m0);
@@ -59,55 +58,45 @@ export async function generate(builder: FileBuilder) {
 		});
 		builder.logger.warn(m);
 		throw new Error('invalid schema');
-	});
+	}
+
+	function addScript(validator: ValidateFunction) {
+		let code = '(() => {\n';
+		code += standaloneCode(a, validator)
+			.replace(/^export default /gm, '// ')
+			.replace(/^export /gm, '')
+			.replace(/^const (schema\d+)\s+.+"\$id"\s*:\s*"file:\/\/\/.+$/gm, (line, vname: string) => {
+				return `${line}\nallSchemas.push(${vname});`;
+			});
+		code += '\nreturn validate;\n';
+		code += '})();\n';
+		return code;
+	}
+
+	const validateBuildConfig = await a.compileAsync(await loader('build-config.schema.json')).catch(schemaError);
+	const validateBuildSecrets = await a.compileAsync(await loader('build-secrets.schema.json')).catch(schemaError);
 
 	let code = `// @ts-nocheck\n"use strict";\n`;
 	code += `import type { SchemaObject, ValidateFunction } from 'ajv';\n`;
 	code += `export const allSchemas: SchemaObject[] = [];\n`;
-	const validator = standaloneCode(a, compiled);
-	code += validator
-		.replace(/^export /, '')
-		.replace(/^const (schema\d+)\s+.+"id"\s*:\s*"file:\/\/\/.+$/gm, (line, vname: string) => {
-			return `${line}\nallSchemas.push(${vname});`;
-		});
-	code += `export const validateFunction = validate as ValidateFunction;`;
+	code += 'export const validateBuildConfig: ValidateFunction = ';
+	code += addScript(validateBuildConfig);
+	code += 'export const validateBuildSecrets: ValidateFunction = ';
+	code += addScript(validateBuildSecrets);
 	await writeFileIfChange(resolve(__dirname, 'schemaValidator.generated.ts', r), code);
 
-	// const definitions: Record<string, any> = {};
-	// for (let [file, schema] of Object.entries(a.schemas)) {
-	// 	if (!file.startsWith('file://')) continue;
-
-	// 	schema?.schema
-	// 	const base = basename(file);
-	// 	const namePrefix = fileNameToType(base);
-	// 	content = content.replace(/"\$ref":\s+"([^"]+)"/g, (_m0, url: string) => {
-	// 		let r = '';
-	// 		if (url.startsWith('#')) {
-	// 			r = `#/definitions/${namePrefix}${url.slice(1)}`;
-	// 		} else {
-	// 			const [file, inside] = url.split('#');
-	// 			r = `#/definitions/${fileNameToType(file!)}${inside || ''}`;
-	// 		}
-
-	// 		return `"$ref": ${JSON.stringify(r)}`;
-	// 	});
-	// 	let data;
-	// 	try {
-	// 		data = parse(content);
-	// 	} catch (e: any) {
-	// 		console.error('parse fail: %s [%s]', e.message, file);
-	// 		throw e;
-	// 	}
-	// 	definitions[namePrefix] = data;
-	// }
-
-	// const mainName = fileNameToType('schema.json');
-	// const mainData = definitions[mainName];
-	// delete definitions[mainName];
-	// mainData.definitions = definitions;
-
 	try {
-		r += await compileFromFile(resolve(store, 'schema.json'), {
+		r += await compileFromFile(resolve(store, 'build-config.schema.json'), {
+			additionalProperties: false,
+			format: true,
+			declareExternallyReferenced: true,
+			strictIndexSignatures: true,
+			unreachableDefinitions: true,
+			cwd: store,
+			bannerComment: '',
+			ignoreMinAndMaxItems: true,
+		});
+		r += await compileFromFile(resolve(store, 'build-secrets.schema.json'), {
 			additionalProperties: false,
 			format: true,
 			declareExternallyReferenced: true,
@@ -134,7 +123,7 @@ export async function generate(builder: FileBuilder) {
 		BuildConfig: 'IBuildConfig',
 		Execute: 'IExecuteConfig',
 	};
-	const exportI = ['EnvLike', 'CmdLike', 'PrepareDownload', 'BuildStep'];
+	const exportI = ['EnvLike', 'CmdLike', 'PrepareDownload', 'BuildStep', 'BuildSecrets'];
 
 	for (const { groups } of r.matchAll(/^(?<type>type|interface)\s+(?<name>\S+)\b/gm)) {
 		const { name, type } = groups as { name: string; type: string };

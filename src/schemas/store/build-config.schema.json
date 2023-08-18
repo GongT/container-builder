@@ -3,8 +3,9 @@
 	"id": "build_config",
 	"additionalProperties": false,
 	"type": "object",
-	"required": ["publish", "execute", "build"],
+	"required": ["$schema", "publish", "execute", "build"],
 	"properties": {
+		"$schema": { "type": "string" },
 		"input": { "$ref": "./misc.schema.json#/definitions/envLike" },
 		"publish": {
 			"type": "object",

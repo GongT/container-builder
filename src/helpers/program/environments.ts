@@ -1,64 +1,141 @@
-import { commandInPathSync, findUpUntil } from '@idlebox/node';
+import { definePublicConstant } from '@idlebox/common';
+import { commandInPathSync, exists, findUpUntil, osTempDir } from '@idlebox/node';
 import { config as configEnv } from 'dotenv';
 import { resolve } from 'path';
-import { random } from '../fs/temp';
-import { bail } from '../functions/stdio';
+import { inject, registerAuto } from '../fs/dependency-injection/di';
+import { ICiController, ILogger, ITmpFile } from '../fs/dependency-injection/tokens.generated';
+import { random } from '../fs/random';
+import { bail } from '../functions/logger';
 
-export const isTTY = process.stderr.isTTY;
+@registerAuto()
+export class ProgramEnvironment {
+	public readonly isTTY = process.stderr.isTTY;
+	public readonly IS_CI = process.env.GITHUB_ACTIONS;
+	public readonly BUILD_JSON_NAME: string = 'container.json';
+	public readonly ANNOID_CACHE_PREV_STAGE = 'me.gongt.cache.prevstage';
+	public readonly ANNOID_CACHE_HASH = 'me.gongt.cache.hash';
+	public readonly LABELID_RESULT_HASH = 'me.gongt.hash';
+	public readonly INIT_CWD: string = process.cwd();
 
-const TMPDIR = ensureEnv('TMPDIR', '/tmp');
-export const TEMP_DIR = resolve(TMPDIR, 'builder' + random());
-export const CONTAINERS_DATA_PATH = ensureEnv('CONTAINERS_DATA_PATH', '/data/AppData');
-export const SYSTEM_COMMON_CACHE = ensureEnv('SYSTEM_COMMON_CACHE', '/var/cache');
-export const SYSTEM_FAST_CACHE = ensureEnv('SYSTEM_FAST_CACHE', SYSTEM_COMMON_CACHE);
-export const REGISTRY_AUTH_FILE = ensureEnv('REGISTRY_AUTH_FILE', '/etc/containers/auth.json');
-export const FEDORA_VERSION = ensureEnv('FEDORA_VERSION', '38');
-export const BUILD_JSON_NAME = 'container.json';
-export const INIT_CWD = process.cwd();
-export const ANNOID_CACHE_PREV_STAGE = 'me.gongt.cache.prevstage';
-export const ANNOID_CACHE_HASH = 'me.gongt.cache.hash';
-export const LABELID_RESULT_HASH = 'me.gongt.hash';
+	public declare readonly TMPDIR: string;
+	public declare readonly HOME: string;
+	public declare readonly SYSTEM_COMMON_CACHE: string;
+	public declare readonly SYSTEM_FAST_CACHE: string;
+	public declare readonly CONTAINERS_DATA_PATH: string;
+	public declare readonly REGISTRY_AUTH_FILE: string;
+	public declare readonly FEDORA_VERSION: string;
 
-process.env.BUILDAH_HISTORY = 'false';
-process.env.BUILDAH_ISOLATION = 'oci';
+	@inject(ILogger)
+	protected declare readonly logger: ILogger;
+	@inject(ICiController)
+	protected declare readonly ci: ICiController;
+	@inject(ITmpFile).optional()
+	protected declare readonly tmpf: ITmpFile;
 
-export const IS_CI = process.env.GITHUB_ACTIONS;
+	async init() {
+		process.env.BUILDAH_HISTORY = 'false';
+		process.env.BUILDAH_ISOLATION = 'oci';
 
-function ensureEnv(field: string, defVal: string) {
-	if (!process.env[field]) {
-		process.env[field] = defVal;
+		this.ensureEnv('FEDORA_VERSION', () => '38');
+
+		this.ensureEnv('CONTAINERS_DATA_PATH', () => '/data/AppData');
+		this.ensureEnv(
+			'SYSTEM_COMMON_CACHE',
+			() => '/var/cache',
+			() => resolve(this.reqEnvOnCI('HOME'), 'cache')
+		);
+		this.ensureEnv(
+			'TMPDIR',
+			() => osTempDir('builder' + random()),
+			() => this.reqEnvOnCI('RUNNER_TEMP')
+		);
+		this.ensureEnv(
+			'SYSTEM_FAST_CACHE',
+			() => this.SYSTEM_COMMON_CACHE,
+			() => this.SYSTEM_COMMON_CACHE
+		);
+		this.ensureEnv(
+			'REGISTRY_AUTH_FILE',
+			() => resolve(this.TMPDIR, 'auth.json'),
+			() => resolve(this.reqEnvOnCI('secrets'), `auth${random(2)}.json`)
+		);
+
+		const HOME = resolve(this.TMPDIR, 'HOME');
+		process.env.HOME = HOME;
+
+		delete process.env.XDG_RUNTIME_DIR;
+
+		return { HOME };
 	}
-	return process.env[field]!;
-}
 
-const cmdMap = new Map<string, string>();
-export function requireCommand(cmd: string) {
-	if (cmdMap.has(cmd)) return cmdMap.get(cmd)!;
+	private reqEnvOnCI(name: string) {
+		if (typeof process.env[name] === 'string') return process.env[name]!;
+		throw new Error(`missing required CI environment: ${name}`);
+	}
 
-	let found;
-	if (process.env['COMMAND_PATH_' + cmd.toUpperCase()]) {
-		found = process.env['COMMAND_PATH_' + cmd.toUpperCase()]!;
-	} else {
-		const p = commandInPathSync(cmd);
-		if (!p) {
-			bail('Command not found: ' + cmd);
+	private ensureEnv(_field: keyof this, onDef: () => string, onCI?: () => string) {
+		const field = _field.toString();
+		if (this.IS_CI && onCI !== undefined) {
+			const d = onCI();
+			if (process.env[field] !== d) this.ci.export(field, d);
 		}
-		found = p;
+		if (!process.env[field]) {
+			const def = onDef();
+			this.ci.export(field, def);
+		}
+		const value = process.env[field];
+
+		this.logger.debug(`$env:${field} = ${process.env[field]}`);
+		definePublicConstant(this, field, value);
 	}
-	cmdMap.set(cmd, found);
-	return found;
-}
 
-export const ASSETS_PATH = '/usr/share/scripts/pods';
+	private readonly cmdMap = new Map<string, string>();
+	public requireCommand(cmd: string) {
+		if (this.cmdMap.has(cmd)) return this.cmdMap.get(cmd)!;
 
-async function loadEnvironments() {
-	const path = await findUpUntil(resolved, '.environment');
-	if (path) configEnv({ path });
-}
+		let found;
+		if (process.env['COMMAND_PATH_' + cmd.toUpperCase()]) {
+			found = process.env['COMMAND_PATH_' + cmd.toUpperCase()]!;
+		} else {
+			const p = commandInPathSync(cmd);
+			if (!p) {
+				bail('Command not found: ' + cmd);
+			}
+			found = p;
+		}
+		this.cmdMap.set(cmd, found);
+		return found;
+	}
 
-export let GIT_PROJECT_ROOT = '/not/initialize/path';
-export async function initGitProject(from: string) {
-	const pc = await findUpUntil(from, '.git/config');
-	if (!pc) throw new Error(`can't find any .git folder from "${from}" to root.`);
-	GIT_PROJECT_ROOT = resolve(pc, '../..');
+	public readonly ASSETS_PATH = '/usr/share/scripts/pods';
+
+	private _GIT_PROJECT_ROOT = '/not/initialize/path';
+	public get GIT_PROJECT_ROOT() {
+		return this._GIT_PROJECT_ROOT;
+	}
+	private _PROJECT_ROOT = '/not/initialize/path';
+	public get PROJECT_ROOT() {
+		return this._PROJECT_ROOT;
+	}
+	public async initProject(root: string) {
+		this._PROJECT_ROOT = root;
+		const pc = await findUpUntil(root, '.git/config');
+		if (!pc) throw new Error(`can't find any .git folder from "${root}" to root.`);
+		this._GIT_PROJECT_ROOT = resolve(pc, '../..');
+
+		this.logger.debug(
+			'setting project:\n  cwd=%s\n  project=%s\n  root=%s',
+			this.INIT_CWD,
+			this._PROJECT_ROOT,
+			this._GIT_PROJECT_ROOT
+		);
+
+		const path = resolve(this._GIT_PROJECT_ROOT, '.environment');
+		if (await exists(path)) {
+			this.logger.debug('loading variables from ' + path);
+			configEnv({ path });
+		} else {
+			this.logger.note('no variables file: ' + path);
+		}
+	}
 }

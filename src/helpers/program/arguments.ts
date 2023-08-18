@@ -1,104 +1,62 @@
-import { KnownError } from '../functions/errors';
+import { Command } from '@commander-js/extra-typings';
+import { KnownError, definePublicConstant } from '@idlebox/common';
+import { inject, registerAuto } from '../fs/dependency-injection/di';
+import { ILogger } from '../fs/dependency-injection/tokens.generated';
+import { debugOption, handleCommandError } from '../functions/lifecycle';
+import { applyCommanderCommands } from './commands.generated';
 
-const defaultConfig = {
-	project: '.',
-} as const;
+export type OptionOf<Cmd extends Command> = ReturnType<Cmd['opts']>;
 
-type ArgType = typeof defaultConfig;
+@registerAuto()
+export class ProgramArgs<OptionType> {
+	private readonly argv: readonly string[];
+	private readonly program: Command;
 
-class ProgramArgsClass {
-	private readonly config: ArgType;
-	private readonly argv: string[] = [];
+	@inject(ILogger)
+	private declare readonly logger: ILogger;
 
 	constructor() {
-		const config = { ...defaultConfig } as any;
-		const argv = [...process.argv.slice(2)];
-		while (argv.length > 0) {
-			const item = argv.shift()!;
-			if (item.startsWith('--')) {
-				let name, value;
-				if (item.includes('=')) {
-					[name, value] = item.slice(2).split('=', 2) as [string, string];
-				} else {
-					name = item.slice(2);
-					value = argv.shift();
-				}
+		const program = new Command('pm').addOption(debugOption).description('podman container manager');
+		program.exitOverride(handleCommandError);
 
-				if (!Object.hasOwn(config, name)) throw new KnownError('unknown argument: ' + item);
+		program.hook('preAction', (_thisCommand, actionCommand) => {
+			const options = actionCommand.optsWithGlobals();
+			// if (actionCommand.args.length) {
+			// 	actionCommand.outputHelp({ error: true });
+			// 	throw new KnownError('unknown arguments: ' + actionCommand.args[0]);
+			// }
+			definePublicConstant(this, 'options', options);
+			this.logger.debug('program arguments:', options);
+		});
 
-				if (typeof config[name] === 'boolean') {
-					if (!value || value === 'true') {
-						value = true;
-					} else {
-						value = false;
-					}
-				} else {
-					if (!value || value.startsWith('--')) {
-						throw new KnownError('argument require value: ' + name);
-					}
-				}
+		program.showHelpAfterError(false);
+		program.exitOverride();
+		program.combineFlagAndOptionalValue(false);
+		// program.enablePositionalOptions();
+		program.allowExcessArguments(false);
+		program.configureOutput({
+			outputError() {},
+			writeErr: (str) => this.logger.error(str),
+			writeOut: (str) => this.logger.log(str),
+		});
 
-				Object.assign(config, { [name]: value });
-			} else {
-				this.argv.push(item);
-				break;
-			}
-		}
-
-		this.config = config;
+		applyCommanderCommands(program);
+		this.program = program;
+		this.argv = process.argv.slice(2);
 	}
 
-	private _cmd?: string;
-	get command() {
-		if (typeof this._cmd === 'undefined') {
-			if (!this.argv[0]) {
-				printUsage();
-				throw new KnownError('missing main command');
-			}
-			this._cmd = this.argv.shift()!;
-		}
-		return this._cmd;
+	private declare options: OptionType;
+
+	executeCommand() {
+		return this.program.parseAsync([...this.argv], { from: 'user' });
 	}
 
-	private _job?: string;
-	get job() {
-		if (typeof this._cmd === 'undefined') throw new Error('????');
-		if (typeof this._job === 'undefined') {
-			if (!this.argv[0]) {
-				printUsage();
-				throw new KnownError('missing job to do');
-			}
-			this._job = this.argv.shift()!;
-		}
-		return this._job;
+	get<T extends keyof OptionType>(name: T): OptionType[T] | undefined {
+		return this.options[name];
 	}
-
-	get<T extends keyof ArgType>(name: T): ArgType[T] {
-		return this.config[name];
+	require<T extends keyof OptionType>(name: T): OptionType[T] {
+		const r = this.options[name];
+		if (r === undefined) throw new KnownError('missing argument: ' + name.toString());
+		return r;
 	}
-}
-
-export const ProgramArgs = new ProgramArgsClass();
-
-export function printUsage() {
-	console.error(`
-pm: build & run containers by podman + buildah
-
-	Usage: pm COMMAND [OPTIONS]
-
-Common options:
-	* --project=[path]	path to container.json (defaults to .)
-
-Available commands:
-	* build [path] [--options...]		build image
-	* install [path]		build service
-	* start <path-or-name>		debug start container
-
-Internal commands:
-	* prepare		prepare execute in PreExecStart
-	* service		service commands
-	  * pull-image		pull all image to local
-	  * wait-network		wait network (especially for dns) ready
-	  * wait-disk		wait disk (fstab) ready
-`);
 }

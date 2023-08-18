@@ -1,7 +1,14 @@
 import type { Options } from 'execa';
-import { startProgram, startProgramJson } from '../../helpers/functions/exec';
+import { createInstance, inject, registerAuto } from '../../helpers/fs/dependency-injection/di';
+import { IExecutable, IProgramEnvironment } from '../../helpers/fs/dependency-injection/tokens.generated';
 import { IContainerInspect } from './inspect.container.type';
 import { IImageInspect } from './inspect.image.type';
+
+export function shortId(id: string) {
+	if (id.length === 12) return id;
+	if (id.length === 64) return id.slice(0, 12);
+	throw new Error(`invalid id length: ${id}`);
+}
 
 export enum TargetKind {
 	container = 'container',
@@ -33,7 +40,7 @@ export class ImageInspectHelper extends InspectHelper {
 	}
 }
 
-export const containerToolExecOptions: Options = {
+export const containerToolExecOptions: Options<string> = {
 	all: false,
 	stderr: 'pipe',
 	stdout: 'pipe',
@@ -43,14 +50,28 @@ export const containerToolExecOptions: Options = {
 	encoding: 'utf-8',
 };
 
-export abstract class ContainerTool {
-	protected abstract readonly exe: string;
+@registerAuto()
+export class ContainerTool {
+	protected declare readonly exe: IExecutable<string>;
 
-	protected run(args: string[]) {
-		return startProgram(this.exe, args, containerToolExecOptions);
+	@inject(IProgramEnvironment)
+	protected declare readonly env: IProgramEnvironment;
+
+	constructor() {}
+
+	async init(execName: string) {
+		const exe = await createInstance(IExecutable, execName, containerToolExecOptions);
+		// if (env.IS_CI) {
+		// 	registerGlobalLifecycle(this);
+		// }
+		return { exe };
 	}
-	protected runJson(args: string[]) {
-		return startProgramJson(this.exe, [...args, '--format=json'], containerToolExecOptions);
+
+	run(args: string[]) {
+		return this.exe.executeOutput(args);
+	}
+	runJson(args: string[]) {
+		return this.exe.executeJson([...args, '--format=json']);
 	}
 
 	ps() {
@@ -59,7 +80,7 @@ export abstract class ContainerTool {
 
 	async listImageIds() {
 		const result = await this.run(['images', '--all', '--format={{.ID}}']);
-		return result.stdout.trim().split('\n');
+		return result.trim().split('\n');
 	}
 
 	private readonly _inspectImageCache = new Map<string, ImageInspectHelper>();
@@ -81,16 +102,10 @@ export abstract class ContainerTool {
 	}
 
 	async pull(nameOrId: string) {
-		return startProgram(this.exe, ['pull', nameOrId], {
+		await this.exe.execute(['pull', nameOrId], {
 			...containerToolExecOptions,
 			stdout: 'inherit',
 			stderr: 'inherit',
 		});
 	}
-}
-
-export function shortId(id: string) {
-	if (id.length === 12) return id;
-	if (id.length === 64) return id.slice(0, 12);
-	throw new Error(`invalid id length: ${id}`);
 }

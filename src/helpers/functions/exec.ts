@@ -1,4 +1,8 @@
-import { execa, Options } from 'execa';
+import { commandInPath } from '@idlebox/node';
+import { ExecaChildProcess, ExecaReturnValue, Options, execa } from 'execa';
+import { isAbsolute } from 'path';
+import { inject, registerAuto } from '../fs/dependency-injection/di';
+import { IExecuter } from '../fs/dependency-injection/tokens.generated';
 
 export class ExecuteError extends Error {
 	constructor(
@@ -15,29 +19,142 @@ function fmt(cmd: string, args: string[]) {
 	return [cmd, ...args].map((e) => JSON.stringify(e)).join(' ');
 }
 
-export async function startProgram(cmd: string, args: string[], opt: Options) {
-	let p;
+declare type NotReadonly<T> = {
+	-readonly [K in keyof T]: T[K];
+};
 
-	console.error('\x1B[2m + \x1B[0m')
-	p = await execa(cmd, args, { ...opt, reject: false });
+@registerAuto()
+export class Executer {
+	async executeJson(cmd: string, args: string[], opt: Omit<Options, 'encoding'>): Promise<any> {
+		const result = await this.execute<string>(cmd, args, { ...opt, encoding: 'utf-8' });
+		try {
+			return JSON.parse(result.stdout);
+		} catch {
+			throw new ExecuteError('invalid json output', fmt(cmd, args), result.exitCode, result.stdout);
+		}
+	}
 
-	if (p.signal) {
-		throw new ExecuteError('program killed by signal ' + p.signal, fmt(cmd, args), p.exitCode, p.stderr);
+	async executeOutput<EncodingType extends string | undefined>(
+		cmd: string,
+		args: string[],
+		opt: OptionsTypeOf<EncodingType>
+	): Promise<OutputTypeOf<EncodingType>> {
+		if (opt.stdout || opt.stdio?.[1]) {
+			throw new Error('invalid call to executeOutput');
+		}
+		const result = await this.execute(cmd, args, { ...opt, stdout: 'pipe' });
+		return result.stdout as any;
 	}
-	if (p.exitCode !== 0) {
-		throw new ExecuteError('program exit with code ' + p.exitCode, fmt(cmd, args), p.exitCode, p.stderr);
+
+	async execute<EncodingType extends string | undefined>(
+		cmd: string,
+		args: string[],
+		opt: OptionsTypeOf<EncodingType>
+	): Promise<ExecaReturnValue<OutputTypeOf<EncodingType>>> {
+		const result = await this.executeRaw(cmd, args, opt);
+		this.handleRaw(cmd, args, result);
+		return result;
 	}
-	if (p.failed) {
-		throw new ExecuteError('can not execute', fmt(cmd, args), p.exitCode, p.stderr);
+
+	handleRaw(cmd: string, args: string[], child: ExecaReturnValue<any>) {
+		if (child.signal) {
+			throw new ExecuteError(
+				'program killed by signal ' + child.signal,
+				fmt(cmd, args),
+				child.exitCode,
+				child.stderr?.toString() ?? '<no stderr>'
+			);
+		}
+		if (child.exitCode !== 0) {
+			throw new ExecuteError(
+				'program exit with code ' + child.exitCode,
+				fmt(cmd, args),
+				child.exitCode,
+				child.stderr?.toString() ?? '<no stderr>'
+			);
+		}
+		if (child.failed) {
+			throw new ExecuteError(
+				'can not execute',
+				fmt(cmd, args),
+				child.exitCode,
+				child.stderr?.toString() ?? '<no stderr>'
+			);
+		}
 	}
-	return p;
+
+	executeRaw<EncodingType extends string | undefined>(
+		cmd: string,
+		args: string[],
+		opt: OptionsTypeOf<EncodingType>
+	): ExecaChildProcess<OutputTypeOf<EncodingType>> {
+		process.stderr.write(`\x1B[2m + ${fmt(cmd, args)}\x1B[0m\n`);
+		return execa(cmd, args, { encoding: null as any, ...opt, reject: false }) as ExecaChildProcess<any>;
+	}
 }
 
-export async function startProgramJson(cmd: string, args: string[], opt: Options) {
-	const r = await startProgram(cmd, args, opt);
-	try {
-		return JSON.parse(r.stdout);
-	} catch {
-		throw new ExecuteError('invalid json output', fmt(cmd, args), r.exitCode, r.stdout);
+type OptionsTypeOf<EncodingType = undefined> = EncodingType extends undefined
+	? Omit<Options, 'encoding'>
+	: Options<string>;
+type OutputTypeOf<EncodingType = undefined> = EncodingType extends undefined ? Buffer : string;
+
+@registerAuto()
+export class Executable<EncodingType extends string | undefined = undefined> {
+	@inject(IExecuter).optional()
+	private declare readonly service: IExecuter;
+	private declare readonly command: string;
+	private readonly defaultOptions?: Options;
+
+	async init(command: string, options?: OptionsTypeOf<EncodingType>) {
+		const absolute = isAbsolute(command) ? command : await commandInPath(command);
+		return { command: absolute, defaultOptions: options };
+	}
+
+	applyOptions(opt?: OptionsTypeOf<EncodingType>): OptionsTypeOf<EncodingType>;
+	applyOptions<ET extends string | undefined>(opt?: OptionsTypeOf<ET>): OptionsTypeOf<ET>;
+	applyOptions(opt?: OptionsTypeOf<any>): OptionsTypeOf<any> {
+		let env = this.defaultOptions?.env || {};
+		if (opt?.env) {
+			env = Object.assign({}, env, opt.env);
+		}
+		return Object.assign({}, this.defaultOptions, opt, { shell: false, env });
+	}
+
+	async executeOutput<ET extends string | undefined = EncodingType>(
+		args: string[],
+		opt?: OptionsTypeOf<ET>
+	): Promise<OutputTypeOf<ET>> {
+		opt = this.applyOptions(opt);
+		return this.service.executeOutput(this.command, args, opt);
+	}
+
+	executeJson(args: string[], opt?: Omit<Options, 'encoding'>): Promise<any> {
+		opt = this.applyOptions(opt);
+		return this.service.executeJson(this.command, args, opt);
+	}
+
+	execute<ET extends string | undefined = EncodingType>(
+		args: string[],
+		opt?: OptionsTypeOf<ET>
+	): Promise<ExecaReturnValue<OutputTypeOf<ET>>> {
+		opt = this.applyOptions(opt);
+		return this.service.execute(this.command, args, opt);
+	}
+
+	handleRaw(args: string[], child: ExecaReturnValue<any>) {
+		return this.service.handleRaw(this.command, args, child);
+	}
+
+	executeRaw(args: string[], opt?: OptionsTypeOf<EncodingType>): ExecaChildProcess<OutputTypeOf<EncodingType>>;
+	executeRaw<ET extends string | undefined>(
+		args: string[],
+		opt?: OptionsTypeOf<ET>
+	): ExecaChildProcess<OutputTypeOf<ET>>;
+	executeRaw<ET extends string | undefined = EncodingType>(
+		args: string[],
+		opt?: OptionsTypeOf<ET>
+	): ExecaChildProcess<OutputTypeOf<ET>> {
+		opt = this.applyOptions(opt);
+		return this.service.executeRaw(this.command, args, opt);
 	}
 }

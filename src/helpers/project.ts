@@ -1,51 +1,60 @@
+import { KnownError } from '@idlebox/common';
 import { findUpUntil } from '@idlebox/node';
 import { stat } from 'fs/promises';
 import { dirname, resolve } from 'path';
-import { IConfigReader, readConfigFile } from '../schemas/config-read';
-import { AssetsHelper } from './fs/assets';
-import { KnownError } from './functions/errors';
-import { ProgramArgs } from './program/arguments';
-import { INIT_CWD } from './program/environments';
+import { inject, registerAuto } from './fs/dependency-injection/di';
+import { IProgramArgs, IProgramEnvironment } from './fs/dependency-injection/tokens.generated';
 
-class Project {
-	constructor(
-		public readonly root: string,
-		public readonly config: IConfigReader,
-		public readonly assets: AssetsHelper
-	) {}
+interface IWithProject {
+	readonly project: string;
 }
 
-export interface IProject extends Project {}
-export async function createProject(dir: string = ProgramArgs.job): Promise<IProject> {
-	const inPath = resolve(INIT_CWD, dir);
-	let resolved: string;
-	try {
-		let s = await stat(inPath);
-		if (s.isFile()) {
-			resolved = inPath;
-		} else {
-			resolved = resolve(inPath, 'container.json');
-			s = await stat(resolved);
-			if (!s.isFile()) {
-				throw new KnownError('can not read config file at: ' + resolved);
+@registerAuto()
+export class Project {
+	public declare readonly configFile: string;
+	public declare readonly rootDir: string;
+	public declare readonly secretFile: string;
+	
+	@inject(IProgramEnvironment)
+	private declare readonly env: IProgramEnvironment;
+	@inject(IProgramArgs)
+	private declare readonly args: IProgramArgs<IWithProject>;
+
+	async init() {
+		// console.log('[project class] init');
+		const inPath = resolve(this.env.INIT_CWD, this.args.require('project'));
+		let resolved: string;
+		try {
+			let s = await stat(inPath);
+			if (s.isFile()) {
+				resolved = inPath;
+			} else {
+				resolved = resolve(inPath, 'container.json');
+				s = await stat(resolved);
+				if (!s.isFile()) {
+					throw new KnownError('can not read config file at: ' + resolved);
+				}
 			}
+		} catch (e: any) {
+			if (e.code !== 'ENOENT') throw e;
+			throw new KnownError('missing config file at: ' + inPath);
 		}
-	} catch (e: any) {
-		if (e.code !== 'ENOENT') throw e;
-		throw new KnownError('missing config file at: ' + inPath);
+		if (!resolved) {
+			const r = await findUpUntil(inPath, 'container.json');
+			if (!r) throw new Error('container.json not found');
+			resolved = r;
+		}
+
+		await this.env.initProject(dirname(resolved));
+
+		const gitdir = await findUpUntil(inPath, '.git');
+		if (!gitdir) {
+			throw new Error('project not in git repository');
+		}
+		const rootDir = dirname(gitdir);
+
+		const secretFile = resolve(rootDir, '.github/secrets.json');
+
+		return { configFile: resolved, rootDir, secretFile };
 	}
-	if (!resolved) {
-		const r = await findUpUntil(inPath, 'container.json');
-		if (!r) throw new Error('container.json not found');
-		resolved = r;
-	}
-
-	await initGitProject(resolved)
-
-	const config = await readConfigFile(resolved);
-	const assets = new AssetsHelper(config.projectName);
-
-	const self = new Project(dirname(resolved), config, assets);
-
-	return self;
 }

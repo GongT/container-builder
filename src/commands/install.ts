@@ -6,7 +6,4 @@ export function execute(args: OptionOf<typeof command>) {
 	console.log(args);
 }
 
-export const command = new Command()
-	.description('prepare to start container')
-	.addOption(mainProjectArg)
-	.action(execute);
+export const command = new Command().description('install systemd service').addOption(mainProjectArg).action(execute);

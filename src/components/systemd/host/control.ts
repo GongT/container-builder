@@ -1,7 +1,7 @@
 import { parse } from 'dotenv';
 import { Options } from 'execa';
-import { startProgram, startProgramJson } from '../../../helpers/functions/exec';
-import { requireCommand } from '../../../helpers/program/environments';
+import { createInstance, inject } from '../../../helpers/fs/dependency-injection/di';
+import { IExecutable, IProgramEnvironment } from '../../../helpers/fs/dependency-injection/tokens.generated';
 
 const execOpt: Options = {
 	all: true,
@@ -22,20 +22,31 @@ export enum SystemControlKind {
 }
 
 class SystemControl {
-	private readonly exe = requireCommand('systemctl');
+	@inject(IProgramEnvironment)
+	protected declare readonly env: IProgramEnvironment;
 
-	private run(args: string[]) {
-		return startProgram(this.exe, ['--no-pager', ...args], execOpt);
+	private declare readonly exe: IExecutable<string>;
+	async init() {
+		const exe = await createInstance(IExecutable, 'systemctl', { encoding: 'utf-8' });
+		return { exe };
+	}
+
+	private runOut(args: string[]) {
+		return this.exe.executeOutput(['--no-pager', ...args], execOpt);
+	}
+
+	private async run(args: string[]) {
+		await this.exe.executeOutput(['--no-pager', ...args], execOpt);
 	}
 	private runJson(args: string[]) {
-		return startProgramJson(this.exe, ['--no-pager', '--output', 'json', ...args], execOpt);
+		return this.exe.executeJson(['--no-pager', '--output', 'json', ...args], execOpt);
 	}
 
 	daemonReload() {
 		return this.run(['daemon-reload']);
 	}
 	control(type: SystemControlKind, units: string[], wait = true) {
-		const args = [type.toString()];
+		const args: string[] = [SystemControlKind[type]];
 		if (wait) {
 			args.push('--wait');
 		} else {
@@ -48,8 +59,8 @@ class SystemControl {
 	async status(service: string, property: string): Promise<string | undefined>;
 	async status<T>(service: string, ...property: (keyof T)[]): Promise<Record<keyof T, string | undefined>>;
 	async status<T>(service: string, ...property: (keyof T)[]) {
-		const ret = await this.run(['show', '--no-pager', service, '--property', property.join(',')]);
-		const obj: Record<keyof T, string> = parse(ret.stdout);
+		const ret = await this.runOut(['show', '--no-pager', service, '--property', property.join(',')]);
+		const obj: Record<keyof T, string> = parse(ret);
 		if (property.length === 1) {
 			return Object.values(obj)[0];
 		} else {

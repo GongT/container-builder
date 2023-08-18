@@ -1,8 +1,11 @@
-import { ANNOID_CACHE_HASH, requireCommand } from '../../helpers/program/environments';
-import { ContainerTool, TargetKind } from './share';
+import { registerAuto } from '../../helpers/fs/dependency-injection/di';
+import { ContainerTool, TargetKind } from './container-tool';
 
+@registerAuto()
 export class Buildah extends ContainerTool {
-	protected readonly exe = requireCommand('buildah');
+	override init() {
+		return super.init('buildah');
+	}
 
 	async findByAnnotation(labels: Record<string, string>) {
 		const search = Object.entries(labels).map(([key, value]) => {
@@ -24,7 +27,7 @@ export class Buildah extends ContainerTool {
 	}
 
 	async findCache(id: string) {
-		const list = await this.findByAnnotation({ [ANNOID_CACHE_HASH]: id });
+		const list = await this.findByAnnotation({ [this.env.ANNOID_CACHE_HASH]: id });
 		return list[0];
 	}
 
@@ -38,5 +41,3 @@ export class Buildah extends ContainerTool {
 		return result.stdout.trim().split('\n');
 	}
 }
-
-export const buildah = new Buildah();
