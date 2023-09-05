@@ -1,56 +1,93 @@
 import type { FileBuilder } from '@build-script/heft-plugins';
-import { camelCase, lcfirst, relativePath, ucfirst } from '@idlebox/common';
+import { camelCase, lcfirst } from '@idlebox/common';
+import { relativePath } from '@idlebox/node';
 import { readdir, stat } from 'fs/promises';
-import { basename, dirname, resolve } from 'path';
+import { dirname, resolve } from 'path';
 
-export async function generate(builder: FileBuilder) {
-	const target = resolve(builder.projectRoot, 'src/commands');
-	const dir = dirname(builder.filePath);
+class Generator {
+	private readonly dirStack: string[] = [];
+	private readonly nameStack: string[] = ['program'];
+	private readonly imports: string[] = [];
+	private readonly body: string[] = [];
 
-	const commands = [];
-	const subCommands = [];
+	constructor(
+		private readonly ROOT: string,
+		private readonly myDir: string
+	) {}
 
-	let r = `import { Command } from '@commander-js/extra-typings';
-`;
-	for (const file of await readdir(target)) {
-		const path = resolve(target, file);
-		const s = await stat(path);
+	string() {
+		return {
+			imports: this.imports.join('\n'),
+			body: this.body.join('\n'),
+		};
+	}
 
-		const prefix = lcfirst(camelCase(basename(file, '.ts')));
-		commands.push(`${prefix}Command`);
-		if (s.isDirectory()) {
-			let sub = `export const ${prefix}Command = new Command("${basename(file, '.ts')}")\n`;
-			for (const file of await readdir(path)) {
-				const p = resolve(path, file);
-				const pfx = prefix + ucfirst(camelCase(basename(file, '.ts')));
+	async genDir() {
+		const abs = resolve(this.ROOT, ...this.dirStack);
+		// console.log('genDir: %s %s (%s)', this.ROOT, this.dirStack, this.nameStack);
+		for (const file of await readdir(abs)) {
+			// console.log('  -> %s', file);
+			const s = await stat(resolve(abs, file));
 
-				const importSpec = relativePath(dir, p).replace(/\.ts$/, '');
-				r += `import { command as ${pfx}Command } from "${importSpec}";\n`;
-				r += `${pfx}Command.name("${basename(file, '.ts')}");\n`;
-				r += `export { command as ${pfx}Command } from "${importSpec}";\n`;
-				sub += `\t.addCommand(${pfx}Command)\n`;
-				subCommands.push(`${pfx}Command`);
+			if (s.isDirectory()) {
+				const rel = this.dirStack.concat([file]).join('/');
+				const name = lcfirst(camelCase(rel));
+				const vName = `${name}Command`;
+				this.imports.push(`const ${vName} = new Command("${file}");`);
+				this.addTo(vName, file);
+
+				this.nameStack.unshift(vName);
+				this.dirStack.push(file);
+				await this.genDir();
+				this.nameStack.shift();
+				this.dirStack.pop();
+			} else {
+				await this.genFile(file);
 			}
-			r += sub.trim() + ';\n';
-		} else {
-			const importSpec = relativePath(dir, path).replace(/\.ts$/, '');
-			r += `export { command as ${prefix}Command } from "${importSpec}";\n`;
-			r += `import { command as ${prefix}Command } from "${importSpec}";\n`;
-			r += `${prefix}Command.name("${basename(file, '.ts')}");\n`;
 		}
 	}
 
-	r += '\n';
+	async genFile(file: string) {
+		// console.log('genFile: %s (%s)', file, this.dirStack);
+		const base = file.replace(/\.ts$/, '');
+		const rel = this.dirStack.concat([base]).join('/');
+		const importSpec = this.resolveRel(rel);
+		const name = lcfirst(camelCase(rel));
+		const vName = `${name}Command`;
+		// r += `export { command as ${vName} } from "${importSpec}";\n`;
+		this.imports.push(`import { command as ${vName} } from "${importSpec}";`);
 
-	r += `export function applyCommanderCommands(program: Command) {\n`;
-	for (const cmd of [...commands, ...subCommands]) {
-		r += `\t${cmd}.copyInheritedSettings(program);\n`;
+		this.addTo(vName, base);
 	}
-	for (const cmd of commands) {
-		r += `\tprogram.addCommand(${cmd});\n`;
+
+	resolveRel(rel: string) {
+		const abs = resolve(this.ROOT, rel);
+		return relativePath(this.myDir, abs);
 	}
-	r += `\treturn program;\n`;
-	r += `}\n`;
+
+	addTo(sub: string, subName: string) {
+		const parent = this.nameStack[0]!;
+		let r = '';
+		r += `${parent}.addCommand(${sub}.name("${subName}").copyInheritedSettings(${parent}));`;
+		this.body.push(r);
+	}
+}
+
+export async function generate(builder: FileBuilder) {
+	const cmdDir = resolve(builder.projectRoot, 'src/commands');
+	const outDir = dirname(builder.filePath);
+	const g = new Generator(cmdDir, outDir);
+	await g.genDir();
+	const { body, imports } = g.string();
+
+	const r = `import { Command } from '@commander-js/extra-typings';
+
+${imports}
+
+export function applyCommanderCommands(program: Command) {
+${body.replace(/^/gm, '\t')}
+}
+`;
 
 	return r;
 }

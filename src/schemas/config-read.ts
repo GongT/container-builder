@@ -1,7 +1,6 @@
 import { DeepReadonly, KnownError } from '@idlebox/common';
 import { loadJsonFile, writeJsonFile, writeJsonFileBack } from '@idlebox/node-json-edit';
 import { ValidateFunction } from 'ajv';
-import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
 import { inject, registerAuto } from '../helpers/fs/dependency-injection/di';
 import {
@@ -84,7 +83,9 @@ export class ConfigReader extends SchemaReader {
 		if (!this.env.IS_CI) {
 			if (!(await this.ensureSchema(config, 'build-config.schema.json'))) {
 				const ch = await writeJsonFileBack(config);
-				this.logger.note('write json file %s (%s)', this.proj.configFile, ch ? 'ok' : 'not change');
+				if (ch) {
+					this.logger.warn('modify $schema in %s', this.proj.configFile);
+				}
 			}
 		}
 
@@ -96,7 +97,7 @@ export class ConfigReader extends SchemaReader {
 
 @registerAuto()
 export class SecretReader extends SchemaReader {
-	private secretsContent?: IBuildSecrets;
+	private declare readonly _json: IBuildSecrets;
 
 	@inject(IProject)
 	private declare readonly proj: IProject;
@@ -105,28 +106,29 @@ export class SecretReader extends SchemaReader {
 	@inject(IGpgManager)
 	private declare readonly gpg: IGpgManager;
 
-	async loadSecret(): Promise<DeepReadonly<IBuildSecrets>> {
-		if (this.secretsContent) return this.secretsContent;
-		const secrets: IBuildSecrets = await this.gpg.load(this.proj.secretFile);
+	async init() {
+		const content: IBuildSecrets = await this.gpg.load(this.proj.secretFile);
 
 		if (!this.env.IS_CI) {
-			if (!(await this.ensureSchema(secrets, 'build-secrets.schema.json'))) {
-				const ch = await writeJsonFile(this.proj.secretFile, secrets);
-				this.logger.note('write json file %s (%s)', this.proj.secretFile, ch ? 'ok' : 'not change');
+			if (!(await this.ensureSchema(content, 'build-secrets.schema.json'))) {
+				const ch = await writeJsonFile(this.proj.secretFile, content);
+				if (ch) {
+					this.logger.warn('modify $schema in %s', this.proj.secretFile);
+				}
 			}
 		}
 
-		this.verifyJson(validateBuildSecrets, secrets, this.proj.secretFile);
-		this.secretsContent = secrets;
-		return this.secretsContent;
+		this.verifyJson(validateBuildSecrets, content, this.proj.secretFile);
+		return { json: content };
 	}
 
-	async ensurePassword() {
-		const secrets = this.secretsContent!;
-		if (!secrets.self_password) {
-			secrets.self_password = randomBytes(64).toString('hex');
-			this.logger.warn('generated new passphrase to json file: ' + this.proj.secretFile);
-			await writeJsonFile(this.proj.secretFile, secrets);
-		}
+	public get(): DeepReadonly<IBuildSecrets> {
+		return this._json;
+	}
+
+	async changePassword(newPass: string) {
+		this._json.self_password = newPass;
+		this.logger.warn('generated new passphrase to json file: ' + this.proj.secretFile);
+		await writeJsonFile(this.proj.secretFile, this._json);
 	}
 }

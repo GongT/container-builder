@@ -1,6 +1,7 @@
 import { Command, Option } from '@commander-js/extra-typings';
 import { KnownError } from '@idlebox/common';
 import { streamToBuffer } from '@idlebox/node';
+import { randomBytes } from 'crypto';
 import { createInterface } from 'readline/promises';
 import { resolveService } from '../helpers/fs/dependency-injection/di';
 import {
@@ -41,13 +42,16 @@ export async function execute() {
 	const project = await resolveService(IProject);
 	const gpg = await resolveService(IGpgManager);
 	const logger = await resolveService(ILogger);
-	const reader = await resolveService(ISecretReader);
 
 	const file = project.secretFile;
 	if (encrypt) {
-		const json = await reader.loadSecret();
-		await reader.ensurePassword();
-		const ch = await gpg.encrypt(file, json.self_password);
+		const secrets = await resolveService(ISecretReader);
+
+		if (!secrets.get().self_password) {
+			await secrets.changePassword(randomBytes(64).toString('hex'));
+		}
+
+		const ch = await gpg.encrypt(file, secrets.get().self_password);
 		logger.success('encrypt file success%s: %s.gpg', ch ? '' : ' (not change)', file);
 	} else {
 		let password;
@@ -70,6 +74,6 @@ export async function execute() {
 		}
 		const ch = await gpg.decrypt(file, password);
 		logger.success('decrypt file success%s: %s', ch ? '' : ' (not change)', file);
-		await reader.loadSecret();
+		await resolveService(ISecretReader);
 	}
 }

@@ -16,7 +16,7 @@ export class CiController {
 		if (this.env.IS_CI) {
 			registerGlobalLifecycle(this);
 		} else {
-			this.logger.note('not in CI, skip lifecycles');
+			this.logger.debug('not in CI, skip lifecycles');
 		}
 	}
 
@@ -24,7 +24,7 @@ export class CiController {
 		if (this.env.IS_CI) {
 			console.error(`::error ::${message}`);
 		} else {
-			this.logger.warn(message);
+			this.logger.debug('[CI-EMIT-ERROR] %s', message);
 		}
 	}
 

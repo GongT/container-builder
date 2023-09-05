@@ -5,7 +5,7 @@
 		"stepKindFrom": {
 			"type": "object",
 			"required": ["kind", "image"],
-			"additionalProperties": false,
+			"description": "pull base image",
 			"properties": {
 				"kind": { "const": "from" },
 				"image": { "type": "string" },
@@ -15,7 +15,7 @@
 		"stepKindBuild": {
 			"type": "object",
 			"required": ["kind", "containerFile"],
-			"additionalProperties": false,
+			"description": "run podman build on a Containerfile",
 			"properties": {
 				"kind": { "const": "build" },
 				"contextDir": { "type": "string" },
@@ -27,7 +27,7 @@
 		"stepKindCopyfiles": {
 			"type": "object",
 			"required": ["kind", "files", "dest"],
-			"additionalProperties": false,
+			"description": "copy files from project dir or another image",
 			"properties": {
 				"kind": { "const": "copyfiles" },
 				"files": {
@@ -48,7 +48,7 @@
 		"stepKindInstall": {
 			"type": "object",
 			"required": ["kind", "packages", "packageManager"],
-			"additionalProperties": false,
+			"description": "install some dependencies using system package manager",
 			"properties": {
 				"kind": { "const": "install" },
 				"packages": {
@@ -70,7 +70,7 @@
 		"stepKindExecute": {
 			"type": "object",
 			"required": ["kind", "scriptFile"],
-			"additionalProperties": false,
+			"description": "execute any script inside container",
 			"properties": {
 				"kind": { "const": "execute" },
 				"scriptFile": {
@@ -79,13 +79,13 @@
 					"description": "a file path"
 				},
 				"contextDir": { "type": "string" },
-				"interceptor": { "type": "string", "description": "argv0 in container, defaults to bash" }
+				"interceptor": { "type": "string", "description": "argv0 in container", "default": "bash" }
 			}
 		},
 		"stepKindNginx": {
 			"type": "object",
 			"required": ["kind", "provideSocket"],
-			"additionalProperties": false,
+			"description": "provide nginx socket inside container, also affect service execute.",
 			"properties": {
 				"kind": { "const": "nginx" },
 				"configFile": {
@@ -108,7 +108,7 @@
 		"stepKindSystemd": {
 			"type": "object",
 			"required": ["kind"],
-			"additionalProperties": false,
+			"description": "start some offline systemctl action inside container, eg. enable. (and optional copy unit files into it)",
 			"properties": {
 				"kind": { "const": "systemd" },
 				"preInit": {
@@ -154,6 +154,7 @@
 	},
 
 	"type": "object",
+	"$combinePropertyNames": true,
 	"allOf": [
 		{ "$ref": "#/definitions/buildStepItemBase" },
 		{

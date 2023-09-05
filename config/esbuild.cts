@@ -21,6 +21,9 @@ export const options: BuildOptions[] = [
 		sourceRoot: __dirname,
 		minifySyntax: !isDebug,
 		keepNames: true,
+		logOverride: {
+			'ignored-bare-import': 'silent',
+		},
 		banner: {
 			js: `
 				import { fileURLToPath as topLevelFileURLToPath } from 'url';

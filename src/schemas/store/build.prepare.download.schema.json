@@ -4,7 +4,6 @@
 	"definitions": {
 		"prepareKindDownloadSimple": {
 			"type": "object",
-			"additionalProperties": false,
 			"required": ["url"],
 			"properties": {
 				"kind": { "const": "file" },
@@ -13,7 +12,6 @@
 		},
 		"prepareKindDownloadGit": {
 			"type": "object",
-			"additionalProperties": false,
 			"required": ["url"],
 			"properties": {
 				"kind": { "const": "clone" },
@@ -23,7 +21,6 @@
 		},
 		"prepareKindDownloadRelease": {
 			"type": "object",
-			"additionalProperties": false,
 			"required": ["repo", "file"],
 			"properties": {
 				"kind": { "const": "release" },
@@ -42,17 +39,15 @@
 		}
 	},
 
-	"type": "array",
-	"items": {
-		"allOf": [
-			{ "$ref": "#/definitions/prepareKindDownloadBase" },
-			{
-				"anyOf": [
-					{ "$ref": "#/definitions/prepareKindDownloadSimple" },
-					{ "$ref": "#/definitions/prepareKindDownloadGit" },
-					{ "$ref": "#/definitions/prepareKindDownloadRelease" }
-				]
-			}
-		]
-	}
+	"$combinePropertyNames": true,
+	"allOf": [
+		{ "$ref": "#/definitions/prepareKindDownloadBase" },
+		{
+			"anyOf": [
+				{ "$ref": "#/definitions/prepareKindDownloadSimple" },
+				{ "$ref": "#/definitions/prepareKindDownloadGit" },
+				{ "$ref": "#/definitions/prepareKindDownloadRelease" }
+			]
+		}
+	]
 }

@@ -78,9 +78,13 @@ export class GpgManager {
 
 	async load(jsonFile: string) {
 		const data = await readFileIfExists(jsonFile, 'utf-8');
-		if (data) return parse(data);
+		if (data) {
+			this.logger.debug('using plain-text secret file: %s', jsonFile);
+			return parse(data);
+		}
 
 		const encrypted = jsonFile + '.gpg';
+		this.logger.debug('using encrypted secret file: %s', encrypted);
 		const pass = process.env.SECRET_PASSWORD;
 		if (!pass) {
 			if (this.env.IS_CI) {

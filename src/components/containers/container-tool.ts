@@ -1,3 +1,4 @@
+import { definePublicConstant } from '@idlebox/common';
 import type { Options } from 'execa';
 import { createInstance, inject, registerAuto } from '../../helpers/fs/dependency-injection/di';
 import { IExecutable, IProgramEnvironment } from '../../helpers/fs/dependency-injection/tokens.generated';
@@ -50,6 +51,9 @@ export const containerToolExecOptions: Options<string> = {
 	encoding: 'utf-8',
 };
 
+const inspectImageCache = new Map<string, ImageInspectHelper>();
+const inspectContainerCache = new Map<string, IContainerInspect>();
+
 @registerAuto()
 export class ContainerTool {
 	protected declare readonly exe: IExecutable<string>;
@@ -64,7 +68,7 @@ export class ContainerTool {
 		// if (env.IS_CI) {
 		// 	registerGlobalLifecycle(this);
 		// }
-		return { exe };
+		definePublicConstant(this, 'exe', exe);
 	}
 
 	run(args: string[]) {
@@ -83,12 +87,10 @@ export class ContainerTool {
 		return result.trim().split('\n');
 	}
 
-	private readonly _inspectImageCache = new Map<string, ImageInspectHelper>();
-	private readonly _inspectContainerCache = new Map<string, IContainerInspect>();
 	async inspect(kind: TargetKind.container, id: string): Promise<IContainerInspect>;
 	async inspect(kind: TargetKind.image, id: string): Promise<ImageInspectHelper>;
 	async inspect(kind: TargetKind, id: string) {
-		const cache = kind === TargetKind.image ? this._inspectImageCache : this._inspectContainerCache;
+		const cache = kind === TargetKind.image ? inspectImageCache : inspectContainerCache;
 		if (cache.has(id)) return cache.get(id)!;
 
 		const ret = await this.runJson(['inspect', `--type=${kind}`, id]);

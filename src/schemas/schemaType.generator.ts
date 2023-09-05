@@ -13,17 +13,38 @@ import { resolve } from 'path';
 // 	return ucfirst(camelCase(name));
 // }
 
-function createLoader(store: string, builder: FileBuilder) {
+function createLoader(path: string, store: Record<string, string>, builder: FileBuilder) {
 	return async (uri: string): Promise<any> => {
 		// console.error('load schema:', uri);
 		if (uri.startsWith('file://')) uri = uri.slice(7);
 
-		const file = resolve(store, uri);
+		const file = resolve(path, uri);
 		// console.error('          ->', file);
 		builder.watchFiles(file);
 		const content = await readFile(file, 'utf-8');
 		const json = parse(content, undefined, true) as any;
+
+		try {
+			if (json.$combinePropertyNames) {
+				const names: Record<string, any> = {};
+				for (const item of Object.values(json.definitions) as any) {
+					if (!item.properties) continue;
+					for (const key of Object.keys(item.properties)) {
+						names[key] = {};
+					}
+				}
+				delete json.$combinePropertyNames;
+				json.type = 'object';
+				json.properties = names;
+				json.additionalProperties = false;
+			}
+		} catch (e: any) {
+			console.error('failed combine property:', e.stack);
+			throw e;
+		}
+
 		json.$id = 'file:///' + uri;
+		store[uri] = json;
 		return json;
 	};
 }
@@ -32,7 +53,8 @@ export async function generate(builder: FileBuilder) {
 	let r = '';
 
 	const store = resolve(__dirname, 'store');
-	const loader = createLoader(store, builder);
+	const registry: Record<string, string> = {};
+	const loader = createLoader(store, registry, builder);
 
 	const a = new ajv({
 		strict: true,
@@ -65,9 +87,13 @@ export async function generate(builder: FileBuilder) {
 		code += standaloneCode(a, validator)
 			.replace(/^export default /gm, '// ')
 			.replace(/^export /gm, '')
-			.replace(/^const (schema\d+)\s+.+"\$id"\s*:\s*"file:\/\/\/.+$/gm, (line, vname: string) => {
-				return `${line}\nallSchemas.push(${vname});`;
-			});
+			.replace(
+				/^const (schema\d+)\s+.+"\$id"\s*:\s*"file:\/\/\/(.+\.json)".+$/gm,
+				(line, vname: string, fname: string) => {
+					delete registry[fname];
+					return `${line}\nallSchemas.push(${vname});`;
+				}
+			);
 		code += '\nreturn validate;\n';
 		code += '})();\n';
 		return code;
@@ -83,6 +109,9 @@ export async function generate(builder: FileBuilder) {
 	code += addScript(validateBuildConfig);
 	code += 'export const validateBuildSecrets: ValidateFunction = ';
 	code += addScript(validateBuildSecrets);
+	for (const [file, json] of Object.entries(registry)) {
+		code += `/* EXTRA SCHEMA ${file} */ allSchemas.push(${JSON.stringify(json)});\n`;
+	}
 	await writeFileIfChange(resolve(__dirname, 'schemaValidator.generated.ts', r), code);
 
 	try {

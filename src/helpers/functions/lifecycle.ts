@@ -29,6 +29,7 @@ export function startLifecycle() {
 		return __exit(code);
 	};
 
+	const console = global.console;
 	const wrappedConsole = new Console(process.stderr, process.stderr);
 	for (const item of disabledCalls) {
 		const original = wrappedConsole[item];
@@ -45,6 +46,7 @@ export function startLifecycle() {
 	process.on('unhandledRejection', (reason) => {
 		console.error(
 			'\x1b[38;5;9;7mUnhandledRejection\x1B[0m',
+			(reason as any)?.constructor?.name ?? 'UnknownError',
 			reason instanceof Error ? prettyFormatError(reason) : reason
 		);
 		gracefullExit(1);
@@ -64,7 +66,7 @@ export function startLifecycle() {
 	});
 	process.on('SIGINT', () => {
 		finishLifecycle();
-		console.error('\n^C')
+		console.error('\n^C');
 		gracefullExit(1);
 	});
 }
@@ -97,7 +99,9 @@ export function runMainWithErrorHandle(main: () => Promise<any>) {
 function gracefullExit(code: number) {
 	process.exitCode = code;
 	disposeGlobal().finally(() => {
-		if (process.exitCode) console.error('quit with code: %d', process.exitCode);
-		process.exit();
+		if (process.exitCode)
+			process.stderr.write('quit with code: ' + process.exitCode + '\n', () => {
+				process.exit();
+			});
 	});
 }

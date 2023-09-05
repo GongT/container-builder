@@ -4,7 +4,6 @@
 	"definitions": {
 		"MountKindBind": {
 			"type": "object",
-			"additionalProperties": false,
 			"required": ["source"],
 			"properties": {
 				"kind": { "const": "bind" },
@@ -14,7 +13,6 @@
 		},
 		"MountKindSize": {
 			"type": "object",
-			"additionalProperties": false,
 			"required": ["size"],
 			"properties": {
 				"kind": { "const": "tmpfs" },
@@ -23,7 +21,6 @@
 		},
 		"MountKindVolume": {
 			"type": "object",
-			"additionalProperties": false,
 			"required": ["name"],
 			"properties": {
 				"kind": { "const": "volume" },
@@ -41,6 +38,7 @@
 	},
 
 	"type": "object",
+	"$combinePropertyNames": true,
 	"allOf": [
 		{ "$ref": "#/definitions/MountKindBase" },
 		{

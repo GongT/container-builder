@@ -5,6 +5,9 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"download": { "$ref": "./build.prepare.download.schema.json" }
+		"download": {
+			"type": "array",
+			"items": { "$ref": "./build.prepare.download.schema.json" }
+		}
 	}
 }

@@ -38,6 +38,6 @@ export class Buildah extends ContainerTool {
 			'--format={{.ID}}',
 			...labels.map((l) => `--filter=label=${l}`),
 		]);
-		return result.stdout.trim().split('\n');
+		return result.trim().split('\n');
 	}
 }

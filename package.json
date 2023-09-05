@@ -3,7 +3,13 @@
 	"type": "module",
 	"version": "0.0.1",
 	"description": "but it build with buildah",
-	"keywords": ["buildah", "builder", "container", "docker", "podman"],
+	"keywords": [
+		"buildah",
+		"builder",
+		"container",
+		"docker",
+		"podman"
+	],
 	"license": "MIT",
 	"author": "GongT",
 	"bin": {
@@ -27,6 +33,7 @@
 		"commander": "^11.0.0",
 		"dotenv": "^16.3.1",
 		"execa": "^7.2.0",
+		"glob": "^10.3.3",
 		"reflect-metadata": "^0.1.13",
 		"source-map-support": "^0.5.21",
 		"tslib": "^2.6.1"
@@ -38,6 +45,7 @@
 		"@rushstack/heft": "^0.58.0",
 		"@rushstack/heft-jest-plugin": "^0.7.17",
 		"@rushstack/heft-typescript-plugin": "^0.1.19",
+		"@types/glob": "^8.1.0",
 		"@types/node": "^20.4.4",
 		"comment-json": "^4.2.3",
 		"dpdm": "^3.13.1",

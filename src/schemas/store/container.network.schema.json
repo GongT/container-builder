@@ -4,7 +4,6 @@
 	"definitions": {
 		"NetworkKindBridge": {
 			"type": "object",
-			"additionalProperties": false,
 			"required": ["macAddress"],
 			"properties": {
 				"kind": { "const": "bridge" },
@@ -13,7 +12,6 @@
 		},
 		"NetworkKindSimple": {
 			"type": "object",
-			"additionalProperties": false,
 			"required": ["ports"],
 			"properties": {
 				"kind": { "const": "simple" },
@@ -42,6 +40,8 @@
 		}
 	},
 
+	"type": "object",
+	"$combinePropertyNames": true,
 	"allOf": [
 		{ "$ref": "#/definitions/NetworkKindBase" },
 		{
