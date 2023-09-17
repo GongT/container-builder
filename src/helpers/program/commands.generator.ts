@@ -75,6 +75,7 @@ class Generator {
 
 export async function generate(builder: FileBuilder) {
 	const cmdDir = resolve(builder.projectRoot, 'src/commands');
+	builder.watchFiles(cmdDir);
 	const outDir = dirname(builder.filePath);
 	const g = new Generator(cmdDir, outDir);
 	await g.genDir();

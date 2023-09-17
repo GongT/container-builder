@@ -1,14 +1,17 @@
 import { registerGlobalLifecycle } from '@idlebox/common';
 import { mkdir, open, rm } from 'fs/promises';
 import { resolve } from 'path';
-import { IProgramEnvironment } from './dependency-injection/tokens.generated';
 import { inject, registerAuto } from './dependency-injection/di';
+import { ILogger, IProgramEnvironment } from './dependency-injection/tokens.generated';
 import { random } from './random';
 
 @registerAuto()
 export class TmpFile {
 	@inject(IProgramEnvironment)
 	protected declare readonly env: IProgramEnvironment;
+
+	@inject(ILogger)
+	protected declare readonly logger: ILogger;
 
 	async init() {
 		await mkdir(this.env.HOME, { recursive: true });
@@ -26,6 +29,14 @@ export class TmpFile {
 	}
 
 	async dispose() {
-		await rm(this.env.TMPDIR, { recursive: true });
+		if (process.env.NO_REMOTE_TEMPDIR === 'yes') {
+			this.logger.note('[NO_REMOTE_TEMPDIR=yes] temporary directory not delete: %s', this.env.TMPDIR);
+		} else {
+			this.logger.debug(
+				'remove temporary directory: %s (set env.NO_REMOTE_TEMPDIR=yes to skip)',
+				this.env.TMPDIR
+			);
+			await rm(this.env.TMPDIR, { recursive: true });
+		}
 	}
 }

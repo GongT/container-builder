@@ -4,6 +4,7 @@ import { stat } from 'fs/promises';
 import { dirname, resolve } from 'path';
 import { inject, registerAuto } from './fs/dependency-injection/di';
 import { IProgramArgs, IProgramEnvironment } from './fs/dependency-injection/tokens.generated';
+import { mainProjectArg } from './program/arg.project';
 
 interface IWithProject {
 	readonly project: string;
@@ -14,7 +15,7 @@ export class Project {
 	public declare readonly configFile: string;
 	public declare readonly rootDir: string;
 	public declare readonly secretFile: string;
-	
+
 	@inject(IProgramEnvironment)
 	private declare readonly env: IProgramEnvironment;
 	@inject(IProgramArgs)
@@ -22,7 +23,7 @@ export class Project {
 
 	async init() {
 		// console.log('[project class] init');
-		const inPath = resolve(this.env.INIT_CWD, this.args.require('project'));
+		const inPath = resolve(this.env.INIT_CWD, this.args.require(mainProjectArg));
 		let resolved: string;
 		try {
 			let s = await stat(inPath);

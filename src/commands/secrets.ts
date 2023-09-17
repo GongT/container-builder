@@ -11,16 +11,15 @@ import {
 	IProject,
 	ISecretReader,
 } from '../helpers/fs/dependency-injection/tokens.generated';
-import { mainProjectArg } from '../helpers/program/arg.project';
 
-const encrypt = new Option('-e, --encrypt', 'encrypt file').default(false).conflicts(['decrypt', 'password']);
-const decrypt = new Option('-d, --decrypt', 'decrypt file').default(false).conflicts('encrypt');
-encrypt.mandatory = true;
+const encryptArg = new Option('-e, --encrypt', 'encrypt file').default(false).conflicts(['decrypt', 'password']);
+const decryptArg = new Option('-d, --decrypt', 'decrypt file').default(false).conflicts('encrypt');
+encryptArg.mandatory = true;
 export const command = new Command()
 	.description('secret file process')
-	.addOption(encrypt)
-	.addOption(decrypt)
-	.addOption(mainProjectArg)
+	.addOption(encryptArg)
+	.addOption(decryptArg)
+
 	.action(execute);
 
 interface ISecretsArgs {
@@ -31,8 +30,8 @@ interface ISecretsArgs {
 
 export async function execute() {
 	const args: IProgramArgs<ISecretsArgs> = await resolveService(IProgramArgs);
-	const encrypt = args.get('encrypt');
-	const decrypt = args.get('decrypt');
+	const encrypt = args.get(encryptArg);
+	const decrypt = args.get(decryptArg);
 
 	if (encrypt === decrypt) {
 		command.outputHelp();

@@ -138,4 +138,21 @@ export class ProgramEnvironment {
 			this.logger.note('no variables file: ' + path);
 		}
 	}
+
+	toJSON() {
+		return {
+			isTTY: this.isTTY,
+			IS_CI: this.IS_CI,
+			INIT_CWD: this.INIT_CWD,
+			FEDORA_VERSION: this.FEDORA_VERSION,
+			CONTAINERS_DATA_PATH: this.CONTAINERS_DATA_PATH,
+			SYSTEM_COMMON_CACHE: this.SYSTEM_COMMON_CACHE,
+			TMPDIR: this.TMPDIR,
+			SYSTEM_FAST_CACHE: this.SYSTEM_FAST_CACHE,
+			REGISTRY_AUTH_FILE: this.REGISTRY_AUTH_FILE,
+			ASSETS_PATH: this.ASSETS_PATH,
+			GIT_PROJECT_ROOT: this.GIT_PROJECT_ROOT,
+			PROJECT_ROOT: this.PROJECT_ROOT,
+		};
+	}
 }

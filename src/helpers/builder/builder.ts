@@ -14,9 +14,5 @@ export class BuildStatus extends ContainerTool {
 		await super.init('podman');
 
 		const base = new URL(this.secrets.get().cache);
-
-
 	}
-
-	
 }

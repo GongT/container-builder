@@ -46,7 +46,7 @@
 		"@rushstack/heft-jest-plugin": "^0.7.17",
 		"@rushstack/heft-typescript-plugin": "^0.1.19",
 		"@types/glob": "^8.1.0",
-		"@types/node": "^20.4.4",
+		"@types/node": "^20.4.5",
 		"comment-json": "^4.2.3",
 		"dpdm": "^3.13.1",
 		"esbuild": "^0.18.17",

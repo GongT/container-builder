@@ -13,6 +13,9 @@ export const isDebug = process.argv.includes('--verbose') || parseBooleanEnv(pro
 export const debugOption = new Option('--verbose', 'show debug output').env('BUILD_DEBUG').argParser(parseBooleanEnv);
 
 KnownError.debug(isDebug);
+if(isDebug){
+	console.error('\x1Bc\x1B[2mdebug mode enabled.\x1B[0m')
+}
 
 export function myTrace(txt: string, ...params: any[]) {
 	const message = format(txt, ...params);

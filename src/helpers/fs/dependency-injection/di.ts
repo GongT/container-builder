@@ -6,6 +6,7 @@ import {
 	toDisposable,
 } from '@idlebox/common';
 import 'reflect-metadata';
+import { attachInspect } from '../../functions/attachInspect';
 
 type CanInit<T, TArg extends any[]> = {
 	init(...props: TArg): void | T | Promise<void | Partial<T>>;
@@ -64,21 +65,19 @@ export type TokenTypeOf<TIns extends InstanceOf<any, any[]>> = IDependencyToken<
 >;
 
 export class DependencyError extends KnownError {
-	constructor(
-		message: string,
-		private readonly _stack?: string,
-		deleteFirst: boolean = true
-	) {
+	private readonly _stack?: string;
+
+	constructor(message: string, stack?: string, deleteFirst: boolean = true) {
 		super(message);
-		if (this._stack === undefined) this._stack = super.stack || '';
+		if (stack === undefined) stack = super.stack || '';
 		if (deleteFirst) {
-			this._stack = this._stack.slice(this._stack.indexOf('\n'));
+			this._stack = stack.slice(stack.indexOf('\n'));
+		} else {
+			this._stack = stack;
 		}
+		this.stack = this.message + stack;
 	}
 
-	override get stack() {
-		return this.message + this._stack;
-	}
 	static wrap(e: Error, message?: string) {
 		const msg = message ? message + ': ' + e.message : e.message;
 		if (e instanceof DependencyError) {
@@ -96,6 +95,7 @@ export function registerAuto(): ClassDecorator {
 	return (target: any) => {
 		// console.error('[DI] register: %s', target.name);
 		const token = tokens.get('I' + target.name);
+		attachInspect(target);
 		if (!token) throw new DependencyError(`can't auto register dependency, unknown class: ${target.name}`);
 		container.set(token, target);
 	};

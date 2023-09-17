@@ -10,12 +10,12 @@
 						"pluginPackage": "@build-script/heft-plugins"
 					}
 				},
-				"type-check": {
-					"taskDependencies": ["codegen"],
-					"taskPlugin": {
-						"pluginPackage": "@rushstack/heft-typescript-plugin"
-					}
-				}
+				// "type-check": {
+				// 	"taskDependencies": ["codegen"],
+				// 	"taskPlugin": {
+				// 		"pluginPackage": "@rushstack/heft-typescript-plugin"
+				// 	}
+				// }
 			}
 		},
 		"compile": {

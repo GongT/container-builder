@@ -1,4 +1,4 @@
-import { DeepReadonly, KnownError } from '@idlebox/common';
+import { DeepReadonly, KnownError, linux_case_hyphen } from '@idlebox/common';
 import { loadJsonFile, writeJsonFile, writeJsonFileBack } from '@idlebox/node-json-edit';
 import { ValidateFunction } from 'ajv';
 import { fileURLToPath } from 'url';
@@ -74,7 +74,7 @@ export class ConfigReader extends SchemaReader {
 	private declare readonly env: IProgramEnvironment;
 
 	get projectName() {
-		return this.raw.publish.name;
+		return linux_case_hyphen(this.raw.publish.name).toLowerCase();
 	}
 
 	async init() {
@@ -119,7 +119,7 @@ export class SecretReader extends SchemaReader {
 		}
 
 		this.verifyJson(validateBuildSecrets, content, this.proj.secretFile);
-		return { json: content };
+		return { _json: content };
 	}
 
 	public get(): DeepReadonly<IBuildSecrets> {
