@@ -152,7 +152,7 @@ export async function generate(builder: FileBuilder) {
 		BuildConfig: 'IBuildConfig',
 		Execute: 'IExecuteConfig',
 	};
-	const exportI = ['EnvLike', 'CmdLike', 'PrepareDownload', 'BuildStep', 'BuildSecrets'];
+	const exportI = ['EnvLike', 'CmdLike', 'PrepareDownload', 'BuildStep', 'BuildSecrets', 'ContainerMirror'];
 
 	for (const { groups } of r.matchAll(/^(?<type>type|interface)\s+(?<name>\S+)\b/gm)) {
 		const { name, type } = groups as { name: string; type: string };

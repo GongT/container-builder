@@ -25,6 +25,9 @@ declare type NotReadonly<T> = {
 
 @registerAuto()
 export class Executer {
+	/**
+	 * execute and JSON.parse result
+	 */
 	async executeJson(cmd: string, args: string[], opt: Omit<Options, 'encoding'>): Promise<any> {
 		const result = await this.execute<string>(cmd, args, { ...opt, encoding: 'utf-8' });
 		try {
@@ -34,6 +37,9 @@ export class Executer {
 		}
 	}
 
+	/**
+	 * execute and return string
+	 */
 	async executeOutput<EncodingType extends string | undefined>(
 		cmd: string,
 		args: string[],
@@ -46,6 +52,9 @@ export class Executer {
 		return result.stdout as any;
 	}
 
+	/**
+	 * execute return Successful Completed process object
+	 */
 	async execute<EncodingType extends string | undefined>(
 		cmd: string,
 		args: string[],
@@ -56,6 +65,9 @@ export class Executer {
 		return result;
 	}
 
+	/**
+	 * handle raw process object result
+	 */
 	handleRaw(cmd: string, args: string[], child: ExecaReturnValue<any>) {
 		if (child.signal) {
 			throw new ExecuteError(
@@ -83,13 +95,22 @@ export class Executer {
 		}
 	}
 
+	/**
+	 * execute return process object, not handle error, not completed
+	 */
 	executeRaw<EncodingType extends string | undefined>(
 		cmd: string,
 		args: string[],
 		opt: OptionsTypeOf<EncodingType>
 	): ExecaChildProcess<OutputTypeOf<EncodingType>> {
 		process.stderr.write(`\x1B[2m + ${fmt(cmd, args)}\x1B[0m\n`);
-		return execa(cmd, args, { encoding: null as any, ...opt, reject: false }) as ExecaChildProcess<any>;
+		opt = { encoding: null as any, ...opt, reject: false };
+
+		if (!opt.stdio && !opt.stdout && !opt.stderr) {
+			opt = { ...opt, stdio: ['ignore', 'inherit', 'inherit'] };
+		}
+
+		return execa(cmd, args, opt) as ExecaChildProcess<any>;
 	}
 }
 

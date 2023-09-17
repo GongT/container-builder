@@ -1,0 +1,1 @@
+export const APPLICATION_UUID = '27fa020b-0589-4555-94ea-a0870c1a2605';

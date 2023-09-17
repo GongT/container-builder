@@ -137,7 +137,8 @@
 			"type": "object",
 			"required": ["title", "kind"],
 			"properties": {
-				"id": { "type": "string", "description": "for reference" },
+				"id": { "type": "string", "description": "for output reference" },
+				"uuid": { "type": "string", "description": "autogenerate id, internal use only" },
 				"title": { "type": "string", "description": "only note for user" },
 				"kind": { "$ref": "#/definitions/BuildStepKind" },
 				"cache": {

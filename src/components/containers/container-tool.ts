@@ -1,7 +1,8 @@
 import { definePublicConstant } from '@idlebox/common';
 import type { Options } from 'execa';
+import { join } from 'path';
 import { createInstance, inject, registerAuto } from '../../helpers/fs/dependency-injection/di';
-import { IExecutable, IProgramEnvironment } from '../../helpers/fs/dependency-injection/tokens.generated';
+import { IExecutable, IProgramEnvironment, ITmpFile } from '../../helpers/fs/dependency-injection/tokens.generated';
 import { IContainerInspect } from './inspect.container.type';
 import { IImageInspect } from './inspect.image.type';
 
@@ -61,6 +62,9 @@ export class ContainerTool {
 	@inject(IProgramEnvironment)
 	protected declare readonly env: IProgramEnvironment;
 
+	@inject(ITmpFile)
+	private declare readonly tmpf: ITmpFile;
+
 	constructor() {}
 
 	async init(execName: string) {
@@ -110,4 +114,19 @@ export class ContainerTool {
 			stderr: 'inherit',
 		});
 	}
+
+	async push(image: string, target: IPushTarget) {
+		const full_target = join(target.location, target.path, target.name + ':' + target.tag);
+		const dfile = this.tmpf.getTmpFile();
+		await this.exe.execute(['push', '--digestfile=' + dfile, image, full_target], { stdio: 'inherit' });
+
+		throw new Error('to be impl');
+	}
+}
+
+export interface IPushTarget {
+	location: string;
+	path: string;
+	name: string;
+	tag: string;
 }

@@ -2,6 +2,7 @@ import { DeepReadonly, KnownError, linux_case_hyphen } from '@idlebox/common';
 import { loadJsonFile, writeJsonFile, writeJsonFileBack } from '@idlebox/node-json-edit';
 import { ValidateFunction } from 'ajv';
 import { fileURLToPath } from 'url';
+import { v5 as uuidV5 } from 'uuid';
 import { inject, registerAuto } from '../helpers/fs/dependency-injection/di';
 import {
 	IGlobalAssetsHelper,
@@ -10,7 +11,8 @@ import {
 	IProgramEnvironment,
 	IProject,
 } from '../helpers/fs/dependency-injection/tokens.generated';
-import { IBuildConfig, IBuildSecrets } from './schemaType.generated';
+import { APPLICATION_UUID } from '../helpers/misc/constants';
+import { IBuildConfig, IBuildSecrets, IBuildStep, IContainerMirror } from './schemaType.generated';
 import { allSchemas, validateBuildConfig, validateBuildSecrets } from './schemaValidator.generated';
 
 export interface IConfigJson extends IBuildConfig {
@@ -64,9 +66,16 @@ abstract class SchemaReader {
 	}
 }
 
+export interface IStep {
+	uuid: string;
+	step: DeepReadonly<IBuildStep>;
+	index: number;
+}
+
 @registerAuto()
 export class ConfigReader extends SchemaReader {
 	public declare readonly raw: DeepReadonly<IConfigJson>;
+	private stepIds = new Map<string, IBuildStep>();
 
 	@inject(IProject)
 	private declare readonly proj: IProject;
@@ -75,6 +84,27 @@ export class ConfigReader extends SchemaReader {
 
 	get projectName() {
 		return linux_case_hyphen(this.raw.publish.name).toLowerCase();
+	}
+
+	get steps(): IStep[] {
+		const r = [];
+		for (const [uuid, step] of this.stepIds.entries()) {
+			const index = this.raw.build.steps.indexOf(step);
+			r.push({ uuid, step, index });
+		}
+		return r;
+	}
+
+	getStepById(id: string): DeepReadonly<IBuildStep> {
+		const step = this.stepIds.get(id);
+		if (!step) {
+			console.log('[missing step] require "%s", but only theses steps are defined:');
+			for (const [uuid, step] of this.stepIds) {
+				console.log('[%d] %s - %s', this.raw.build.steps.indexOf(step), uuid, step.title);
+			}
+			throw new Error(`missing step with id: ${id}`);
+		}
+		return step;
 	}
 
 	async init() {
@@ -91,8 +121,28 @@ export class ConfigReader extends SchemaReader {
 
 		this.verifyJson(validateBuildConfig, config, this.proj.configFile);
 
+		let ch = false;
+		for (let [index, step] of config.build.steps.entries()) {
+			if (!step.uuid) {
+				ch = true;
+				config.build.steps[index] = {
+					uuid: uuidV5(JSON.stringify(step), APPLICATION_UUID),
+					...step,
+				};
+				step = config.build.steps[index]!;
+			}
+			this.stepIds.set(step.uuid!, step);
+		}
+		if (ch) {
+			await writeJsonFileBack(config);
+		}
+
 		return { raw: config };
 	}
+}
+
+interface IRegistryEndpoint extends IContainerMirror {
+	path: string;
 }
 
 @registerAuto()
@@ -119,12 +169,34 @@ export class SecretReader extends SchemaReader {
 		}
 
 		this.verifyJson(validateBuildSecrets, content, this.proj.secretFile);
-		return { _json: content };
+
+		const cacheLoc = content.cache.split('/', 1)[0]!;
+
+		let found: IContainerMirror | undefined;
+		for (const registry of content.registry) {
+			for (const mirror of registry.mirrors) {
+				if (cacheLoc.startsWith(mirror.location)) {
+					found = mirror;
+					break;
+				}
+			}
+		}
+		if (!found) {
+			throw new Error(`missing cache registry in all registries: ${cacheLoc}`);
+		}
+		const cacheRegistry: IRegistryEndpoint = {
+			...found,
+			path: cacheLoc.slice(found.location.length + 1),
+		};
+
+		return { _json: content, cacheRegistry };
 	}
 
 	public get(): DeepReadonly<IBuildSecrets> {
 		return this._json;
 	}
+
+	public declare readonly cacheRegistry: IRegistryEndpoint;
 
 	async changePassword(newPass: string) {
 		this._json.self_password = newPass;

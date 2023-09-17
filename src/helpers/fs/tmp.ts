@@ -18,6 +18,10 @@ export class TmpFile {
 		registerGlobalLifecycle(this);
 	}
 
+	getTmpFile(name: string = `tmp.${random(3)}`) {
+		return resolve(this.env.TMPDIR, name);
+	}
+
 	async createTmpFile(name: string = `tmp.${random(3)}`) {
 		const f = resolve(this.env.TMPDIR, name);
 		return await open(f, 'wx');

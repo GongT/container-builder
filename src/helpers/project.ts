@@ -1,4 +1,4 @@
-import { KnownError } from '@idlebox/common';
+import { KnownError, relativePath } from '@idlebox/common';
 import { findUpUntil } from '@idlebox/node';
 import { stat } from 'fs/promises';
 import { dirname, resolve } from 'path';
@@ -57,5 +57,9 @@ export class Project {
 		const secretFile = resolve(rootDir, '.github/secrets.json');
 
 		return { configFile: resolved, rootDir, secretFile };
+	}
+
+	get configFileRelative() {
+		return relativePath(this.rootDir, this.configFile);
 	}
 }
